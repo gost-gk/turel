@@ -273,7 +273,7 @@ def main():
     parser.add_argument('--use-gauss', action='store_true', dest='use_gauss', default=False, help='Manually emulate model errors')
     parser.add_argument('--gauss-sigma', type=float, dest='gauss_sigma', default=0.8)
     parser.add_argument('--use-substitution', action='store_true', dest='use_substitution', help='Substitute words that have low confidence')
-    parser.add_argument('--confidence-threshold', type=int, dest='confidence_threshold', default=0.9)
+    parser.add_argument('--confidence-threshold', type=float, dest='confidence_threshold', default=0.9)
     parser.add_argument('--input', type=str, dest='input_filename', default='input.txt', help='Input filename')
     parser.add_argument('--output', type=str, dest='output_filename', default='output.txt', help='Output filename')
     args = parser.parse_args()
