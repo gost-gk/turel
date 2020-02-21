@@ -379,8 +379,11 @@ def main():
     with open(args.input_filename, 'r', encoding='utf-8') as f:
         text = f.read()
 
+    start_time = time.time()
+    print('Generating input batch...')
     filtered_text_list, filtered_chars = filter_out_chars(text, CHARS_ALL)
     x_manual = generate_batch_from_string(max_size, base_images_all, ''.join(filtered_text_list))
+    print(f'Input batch generated in {(time.time() - start_time) * 1000} ms.')
 
     print(f'Cobenizing {args.input_filename}...')
     model_prediction = model.predict(x_manual)
