@@ -11,27 +11,24 @@ import numpy as np
 
 
 CHARS_ENG  = string.ascii_letters
-CHARS_ENG += string.punctuation
-CHARS_ENG += '«»'
-CHARS_ENG += string.digits
 
 CHARS_RUS = 'йцукенгшщзхъфывапролджэячсмитьбюё'
 CHARS_RUS += CHARS_RUS.upper()
-CHARS_RUS += string.punctuation
-CHARS_RUS += '«»'
-CHARS_RUS += string.digits
 
-CHARS = CHARS_RUS
-CHARS_NUM = len(CHARS)
+CHARS_SPECIAL = string.punctuation
+CHARS_SPECIAL += '«»'
+CHARS_SPECIAL += string.digits
 
-CHARS_ALL = ''.join(set(CHARS_RUS + CHARS_ENG))
+CHARS_ALL = CHARS_ENG + CHARS_RUS + CHARS_SPECIAL
+
+CHARS_NUM = len(CHARS_ALL)
 
 _CHAR_TO_ONEHOT = dict((
         (char, np.array([0] * idx + [1] + [0] * (max(CHARS_NUM - idx - 1, 0))))
     for
         idx, char
     in
-        enumerate(CHARS)
+        enumerate(CHARS_ALL)
 ))
 
 _GLYPH_OFFSET_X = 2
@@ -43,13 +40,13 @@ def char_to_onehot(char):
 
 def onehot_to_char(onehot):
     idx = max(enumerate(onehot), key=lambda x: x[1])[0]
-    return CHARS[idx]
+    return CHARS_ALL[idx]
 
 
 def onehot_to_char_gauss(onehot, sigma=1.5):
     indexes_desc = sorted(((idx, weight) for idx, weight in enumerate(onehot)), key=lambda x: -x[1])
     indexes_idx = min(abs(int(random.normalvariate(0, sigma))), len(indexes_desc) - 1)
-    return CHARS[indexes_desc[indexes_idx][0]]
+    return CHARS_ALL[indexes_desc[indexes_idx][0]]
 
 
 def calculate_max_size(chars, font):
@@ -120,26 +117,46 @@ def generate_distorted_sample(img_LA):
     return img_arr_solid.reshape(img_arr.shape[0] * img_arr.shape[1])
 
 
-def generate_set(max_size, base_images, samples_per_image=100):
-    assert len(base_images) == CHARS_NUM
-    input_vec_len = max_size[0] * max_size[1]
-    output_vec_len = CHARS_NUM
-    set_size = samples_per_image * CHARS_NUM
-    
-    x_set = np.empty(shape=(set_size, input_vec_len))
-    y_set = np.empty(shape=(set_size, output_vec_len))
-
-    sample_num = 0
-    for c, img in base_images.items():
-        for _ in range(samples_per_image):
-            x_set[sample_num] = generate_distorted_sample(img)
-            y_set[sample_num] = char_to_onehot(c)
-            sample_num += 1
+def shuffle_sets_equally(x_set, y_set):
     # LOL
     rng_state = np.random.get_state()
     np.random.shuffle(x_set)
     np.random.set_state(rng_state)
     np.random.shuffle(y_set)
+
+
+def generate_set(max_size, base_images, samples_per_char):
+    input_vec_len = max_size[0] * max_size[1]
+    output_vec_len = CHARS_NUM
+    set_size = samples_per_char * len(base_images)
+
+    x_values = []
+    y_values = []
+    for c, img in base_images.items():
+        for _ in range(samples_per_char):
+            x_values.append(generate_distorted_sample(img))
+            y_values.append(char_to_onehot(c))
+
+    x_set = np.concatenate(x_values).reshape((set_size, input_vec_len))
+    y_set = np.concatenate(y_values).reshape((set_size, output_vec_len))
+    shuffle_sets_equally(x_set, y_set)
+
+    return x_set, y_set
+
+
+def generate_set_biased(max_size, base_images_list, base_images_samples):
+    assert len(base_images_list) == len(base_images_samples)
+    res_x = []
+    res_y = []
+    for base_images, samples_per_image in zip(base_images_list, base_images_samples):
+        x_set, y_set = generate_set(max_size, base_images, samples_per_image)
+        res_x.append(x_set)
+        res_y.append(y_set)
+    x_set = np.concatenate(res_x)
+    y_set = np.concatenate(res_y)
+
+    shuffle_sets_equally(x_set, y_set)
+
     return x_set, y_set
 
 
@@ -155,13 +172,14 @@ def generate_batch_from_string(max_size, base_images, target_string):
     return x_set
 
 
-def generate_sets(max_size, base_images,
-                  train_samples_per_img=100,
-                  valid_samples_per_img=25,
-                  test_samples_per_img=10):
-    x_train, y_train = generate_set(max_size, base_images, train_samples_per_img)
-    x_valid, y_valid = generate_set(max_size, base_images, valid_samples_per_img)
-    x_test, y_test = generate_set(max_size, base_images, test_samples_per_img)
+def generate_sets(max_size,
+                 base_images_rus,
+                 base_images_eng,
+                 base_images_special):
+    base_images_list = (base_images_rus, base_images_special, base_images_eng)
+    x_train, y_train = generate_set_biased(max_size, base_images_list, (85, 10, 5))
+    x_valid, y_valid = generate_set_biased(max_size, base_images_list, (20, 3, 2))
+    x_test, y_test = generate_set_biased(max_size, base_images_list, (7, 2, 1))
     return x_train, y_train, x_valid, y_valid, x_test, y_test
 
 
@@ -233,11 +251,12 @@ def main():
     FONT_FILENAME = args.font_filename
     
     font = ImageFont.truetype(FONT_FILENAME, FONT_SIZE)
-    max_size = calculate_max_size(CHARS_ENG + CHARS_RUS, font)
+    max_size = calculate_max_size(CHARS_ALL, font)
+    
     base_images_rus = generate_base_images(CHARS_RUS, font, max_size)
     base_images_eng = generate_base_images(CHARS_ENG, font, max_size)
-    base_images_all = base_images_rus.copy()
-    base_images_all.update(base_images_eng)
+    base_images_special = generate_base_images(CHARS_SPECIAL, font, max_size)
+    base_images_all = generate_base_images(CHARS_ALL, font, max_size)
 
     input_vec_len = max_size[0] * max_size[1]
 
@@ -252,7 +271,10 @@ def main():
     x_train, y_train, x_valid, y_valid, x_test, y_test = (None,) * 6
     if args.sets == 'gen':
         print('Generating sets, this may take several minutes...')
-        x_train, y_train, x_valid, y_valid, x_test, y_test = generate_sets(max_size, base_images_rus)
+        x_train, y_train, x_valid, y_valid, x_test, y_test = generate_sets(max_size,
+                                                                           base_images_rus,
+                                                                           base_images_eng,
+                                                                           base_images_special)
         print('Done!')
     elif args.sets == 'load':
         print('Loading sets...')
