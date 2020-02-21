@@ -400,6 +400,7 @@ def main():
         text_list = []
         word = []
         word_orig = []
+        restored_list.append((' ', 1))  # to parse the last word
         for char, confidence in restored_list:
             if confidence < args.confidence_threshold:
                 word.append('?')
@@ -422,12 +423,6 @@ def main():
                     word.clear()
                     word_orig.clear()
                     text_list.append(char)
-        if len(word) > 0:
-            if '?' in word:
-                words = list(trie.get_wildcard(''.join(word))) + [''.join(word_orig)]
-                text_list.extend(random.choice(words))
-            else:
-                text_list.extend(word)
         restored_text = ''.join(text_list)
 
     print(restored_text)
