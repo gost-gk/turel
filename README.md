@@ -11,7 +11,8 @@
 ## Использование
 ### Обычное использование для генерации психозы (модель-образец есть в репозитории)
 `python turel.py load-model`
-Вход — input.txt, выход — output.txt (настраивается аргументами `--input`, `output`).
+
+Вход — input.txt, выход — output.txt (настраивается аргументами `--input`, `--output`).
 
 ### Генерация тренировочных наборов и тренировка модели
 `python turel.py train-model --sets gen --save-sets --save-model`
